@@ -7,23 +7,24 @@
 #property link      "https://www.mql5.com"
 #property version   "1.00"
 
+//+------------------------------------------------------------------+
+//| Variables                                                        |
+//+------------------------------------------------------------------+
 // Inputs
 input double equityLimit = 2;
 input double balanceLimit = 2;
+input int    updateFrequency_ms = 1;
 
 // DateTime variables
-string currentDataString = TimeToString(TimeCurrent(), TIME_DATE);
-string currentMinutesString = TimeToString(TimeCurrent(), TIME_MINUTES);
-string timeSeconds = TimeToString(TimeCurrent(), TIME_SECONDS);
-datetime yesterdayTime = TimeCurrent() - PeriodSeconds(PERIOD_D1);
-string yesterdayDataString = TimeToString(yesterdayTime, TIME_DATE);
+string currentDataString = TimeToString(TimeCurrent(), TIME_DATE); //today
+datetime yesterdayTime = TimeCurrent() - PeriodSeconds(PERIOD_D1); 
+string yesterdayDataString = TimeToString(yesterdayTime, TIME_DATE); //yesterday
 
 // Double variables
 double balance, equity, current_pl, prevBalance, limit_orders, open_positions, dailyProfit, todayPL;
 
 // String variables
-string balanceString, equityString;
-
+string balanceString, equityString; 
 string GetDayOfWeek()
 {
    MqlDateTime tm;
@@ -45,90 +46,27 @@ string GetDayOfWeek()
 }
 
 
-//+------------------------------------------------------------------+
-//| Expert initialization function                                   |
-//+------------------------------------------------------------------+
-int OnInit()
-  {
-//--- create timer
-   EventSetTimer(1);
-   // Initialize account data
-   balance = AccountInfoDouble(ACCOUNT_BALANCE);
-   equity = AccountInfoDouble(ACCOUNT_EQUITY);
-   limit_orders = AccountInfoInteger(ACCOUNT_LIMIT_ORDERS);
-   open_positions = AccountInfoDouble(ACCOUNT_ASSETS);
-
-
-
-   GetPl(yesterdayDataString,yesterdayDataString);
-   Print(currentDataString);
-
-   // Date Text Object
-   CreateObject(0, "dateLabel", OBJ_LABEL, 0, 0, 0, 20, 20, "Impact", clrYellow, 
-                  GetDayOfWeek() + ", " + currentDataString);
+// Convert the ACCOUNT_CURRENCY ticker in the corresponding symbol
+string GetAccountCurrency()
+{
+   string currency = AccountInfoString(ACCOUNT_CURRENCY);
+   string account_currency;
    
-   // Separator
-   string separatorText = "";
-   int separatorLenght = 35;
-   for(int i = 0; i < separatorLenght; separatorText += "-", i++);
-   CreateObject(0, "separator", OBJ_LABEL, 0, 0, 0, 50, 15, "Impact", clrAqua, separatorText);
- 
-   // Equity Text Object
-   CreateObject(0, "equityLabel", OBJ_LABEL, 0, 0, 0, 80, 15, "Impact", clrWhite, 
-                  "Equity Limit: " + equityLimit + "% | " +
-                  "Equity: $ " +  DoubleToString(equity, 2));
+   if      (currency == "USD")    account_currency = " $ ";
+   else if (currency == "EUR")    account_currency = " € ";
+   else if (currency == "GBP")    account_currency = " £ ";
+   else    account_currency       = " " + currency + " ";
+   
+   return account_currency;
+}
 
-   // Balance Text Object
-   CreateObject(0, "balanceLabel", OBJ_LABEL, 0, 0, 0, 110, 15, "Impact", clrWhite, 
-                 "Balance Limit: " + balanceLimit + "% | " + 
-                 "Balance: $ " + DoubleToString(balance, 2));
- 
-   color plColor = clrWhite;
-   if(todayPL > 0){
-      plColor = clrLimeGreen;
-   } 
-   if(todayPL < 0){
-      plColor = clrRed;
-   } else plColor = clrWhite;
-   
-   // Floating Equity Text Object
-   todayPL = GetPl(currentDataString,currentDataString);
-   current_pl = (equity - balance); 
-   prevBalance = balance - todayPL - current_pl; // get the previous balance by subtracting/adding today's P/L
-   
-   
-   Print(current_pl);
-   Print(todayPL);
+//+------------------------------------------------------------------+
 
-   CreateObject(0, "floatingeEquityLabel", OBJ_LABEL, 0, 0, 0, 140, 15, "Impact", GetColor(current_pl), 
-                  "Floating Equity: " + DoubleToString(((current_pl/equity)*100),2) + "% | " +
-                  "Current P/L: $ " +  DoubleToString(current_pl,2));                 
 
-   // Today P/L Text Object  
-   CreateObject(0, "todayPL", OBJ_LABEL, 0, 0, 0, 170, 20, "Impact", GetColor(todayPL), 
-                  "Today Loss/Gain: $ " + DoubleToString(todayPL,2) + " | " +
-                  DoubleToString(((todayPL/equity) * 100),2) + "%"); 
-   
-//---
-   return(INIT_SUCCEEDED);
-  }
 //+------------------------------------------------------------------+
-//| Expert deinitialization function                                 |
+//| Functions                                                        |
 //+------------------------------------------------------------------+
-void OnDeinit(const int reason)
-  {
-//--- destroy timer
-   EventKillTimer();
-   ObjectDelete(0,"dateLabel");
-   ObjectDelete(0,"separator");
-   ObjectDelete(0,"equityLabel");
-   ObjectDelete(0,"balanceLabel");
-   ObjectDelete(0,"floatingeEquityLabel");
-   ObjectDelete(0,"todayPL");
-  }
-//+------------------------------------------------------------------+
-//| Expert tick function                                             |
-//+------------------------------------------------------------------+
+// Function to facilitate the creation of objects with similar characteristics 
 void CreateObject(
                   long chart_id,
                   string name,
@@ -152,8 +90,9 @@ void CreateObject(
                   ObjectSetString(chart_id, name, OBJPROP_TEXT, text); 
                   }
 
-
-double GetPl(datetime date1,datetime date2){
+// Get the closed trades from date 1 to date 2 and return the total sum
+double GetPl(datetime date1, datetime date2){
+               
                HistorySelect(date1, date2);
                uint total = HistoryDealsTotal();
                ulong ticket = 0;
@@ -161,7 +100,7 @@ double GetPl(datetime date1,datetime date2){
                double total_PL;
                datetime time;
                for(uint i = 0; i < total; i++)
-               {
+               {  
                   // Try to get deal's ticket
                   if ((ticket = HistoryDealGetTicket(i)) > 0)
                   {
@@ -169,76 +108,139 @@ double GetPl(datetime date1,datetime date2){
                      time = (datetime)HistoryDealGetInteger(ticket, DEAL_TIME);
                      profit = HistoryDealGetDouble(ticket, DEAL_PROFIT);
                      total_PL += profit;
-                     Print(time);
-                     if (profit >= 0) Print("Profit: ", profit + " " + time);
-                     else Print("Loss: ", profit);
                   }
                }   
-               Print("Total P/L: ", total_PL);
-               
                return total_PL;   
 }
 
 
-
-color GetColor(double pl){
-
+// Function to get the text color based on a number (green = positive number, red = negative number)
+color GetColor(double pl)
+   {
    color plColor = clrWhite;
-   if(pl > 0){
-      plColor = clrLimeGreen;
-   } 
-   if(pl < 0){
-      plColor = clrRed;
-   } 
+   if(pl > 0) plColor = clrLimeGreen;
+   if(pl < 0) plColor = clrRed;
    return plColor;
    }
 
+// Function called by the timer to update objects 
 void UpdatePL(){
                // Initialize account data
                balance = AccountInfoDouble(ACCOUNT_BALANCE);
                equity = AccountInfoDouble(ACCOUNT_EQUITY);
                limit_orders = AccountInfoInteger(ACCOUNT_LIMIT_ORDERS);
                open_positions = AccountInfoDouble(ACCOUNT_ASSETS);
+               
      
-               // Floating Equity Text Object
-               todayPL = GetPl(currentDataString,currentDataString);
+               // Calculate data
+               todayPL = GetPl(currentDataString,TimeCurrent()); // Re-download closed trades total amount from date1 to date2
                current_pl = (equity - balance); 
                prevBalance = balance - todayPL - current_pl; // get the previous balance by subtracting/adding today's P/L
-                           
-               Print(current_pl);
-               Print(todayPL);
-
-            
-               // Aggiorna gli oggetti come il Floating Equity Text Object
+  
+               // Update Date Object
                ObjectSetString(0, "dateLabel", OBJPROP_TEXT, GetDayOfWeek() + ", " + currentDataString);
-               
+               // Update Equity Object
                ObjectSetString(0, "equityLabel", OBJPROP_TEXT, "Equity Limit: " + equityLimit + "% | " +
-                                "Equity: $ " +  DoubleToString(equity, 2));     
-                                
+                                "Equity:" + GetAccountCurrency() +  DoubleToString(equity, 2));     
+               // Update Balance Object                 
                ObjectSetString(0, "balanceLabel", OBJPROP_TEXT, "Balance Limit: " + balanceLimit + "% | " + 
-                                 "Balance: $ " + DoubleToString(balance, 2));
-               
+                                 "Balance:" + GetAccountCurrency() + DoubleToString(balance, 2));
+               // Update colors
                color plColor = GetColor(todayPL);
                color currentPlColor = GetColor(current_pl);
-              
-               
+               // Update Date Floating Equity
                ObjectSetString(0,"floatingeEquityLabel", OBJPROP_TEXT, "Floating Equity: " + 
-                                  DoubleToString(((current_pl/equity)*100), 2) + "% | Current P/L: $ " + 
-                                  DoubleToString(current_pl, 2));
-                                  
-               ObjectSetInteger(0,"floatingeEquityLabel", OBJPROP_COLOR, currentPlColor);                  
+                                  DoubleToString(((current_pl/equity)*100), 2) + "% | Current P/L:" + 
+                                  GetAccountCurrency() + DoubleToString(current_pl, 2));  
+               ObjectSetInteger(0,"floatingeEquityLabel", OBJPROP_COLOR, currentPlColor);     
                
-               ObjectSetString(0,"todayPL", OBJPROP_TEXT, "Today Loss/Gain: $ " + DoubleToString(todayPL, 2) +
-                                  " | " + DoubleToString(((todayPL/equity) * 100), 2) + "%");
-                                  
-               ObjectSetInteger(0,"todayPL", OBJPROP_COLOR, plColor);  
+               //Update Total PL Object              
+               // Calculate the total loss by summing the total closed trades and the current floating equity (/equity * 100 for the % value)
+               ObjectSetString(0,"todayPL", OBJPROP_TEXT, "Today Loss/Gain: $ " + DoubleToString((todayPL + current_pl),2) +
+                                  " | " + DoubleToString((((todayPL+current_pl)/equity) * 100), 2) + "%");             
+               ObjectSetInteger(0,"todayPL", OBJPROP_COLOR, plColor);     
                }
+//+------------------------------------------------------------------+
+
 
 //+------------------------------------------------------------------+
 //| Timer function                                                   |
 //+------------------------------------------------------------------+
 void OnTimer()
   {   
-   UpdatePL();
+  UpdatePL();
   }
 //+------------------------------------------------------------------+
+
+
+//+------------------------------------------------------------------+
+//| Expert initialization function                                   |
+//+------------------------------------------------------------------+
+int OnInit()
+  {
+   // Create timer and set it in milliseconds
+   EventSetTimer(updateFrequency_ms);
+   balance = AccountInfoDouble(ACCOUNT_BALANCE);
+   equity = AccountInfoDouble(ACCOUNT_EQUITY);
+   limit_orders = AccountInfoInteger(ACCOUNT_LIMIT_ORDERS);
+   open_positions = AccountInfoDouble(ACCOUNT_ASSETS);
+   todayPL = GetPl(currentDataString,TimeCurrent());
+
+   // Create Date Text Object
+   CreateObject(0, "dateLabel", OBJ_LABEL, 0, 0, 0, 20, 20, "Impact", clrYellow, 
+                  GetDayOfWeek() + ", " + currentDataString);
+   
+   // Create Separator
+   string separatorText = "";
+   int separatorLenght = 35;
+   for(int i = 0; i < separatorLenght; separatorText += "-", i++);
+   CreateObject(0, "separator", OBJ_LABEL, 0, 0, 0, 50, 15, "Impact", clrAqua, separatorText);
+ 
+   // Create Equity Text Object
+   CreateObject(0, "equityLabel", OBJ_LABEL, 0, 0, 0, 80, 15, "Impact", clrWhite, 
+                  "Equity Limit: " + equityLimit + "% | " +
+                  "Equity:" + GetAccountCurrency() +  DoubleToString(equity, 2));
+
+   // Create Balance Text Object
+   CreateObject(0, "balanceLabel", OBJ_LABEL, 0, 0, 0, 110, 15, "Impact", clrWhite, 
+                 "Balance Limit: " + balanceLimit + "% | " + 
+                 "Balance:"+ GetAccountCurrency() + DoubleToString(balance, 2));
+                 
+   // Call the GetColor() function to get the text color by the current P/L
+   color plColor = GetColor(todayPL);
+   color currentPlColor = GetColor(current_pl);
+   
+   // Create Floating Equity Text Object
+   current_pl = (equity - balance); 
+   prevBalance = balance - todayPL - current_pl; // get the previous balance by subtracting/adding today's P/L 
+   CreateObject(0, "floatingeEquityLabel", OBJ_LABEL, 0, 0, 0, 140, 15, "Impact", GetColor(current_pl), 
+                  "Floating Equity: " + DoubleToString(((current_pl/equity)*100),2) + "% | " +
+                  "Current P/L:"+ GetAccountCurrency() +  DoubleToString(current_pl,2));                 
+
+   // Create Today Total P/L Text Object  
+   // Calculate the total loss by summing the total closed trades and the current floating equity (/equity * 100 for the % value)
+   CreateObject(0, "todayPL", OBJ_LABEL, 0, 0, 0, 170, 20, "Impact", GetColor(todayPL), 
+                  "Today Loss/Gain:"+ GetAccountCurrency() + DoubleToString((todayPL + current_pl),2) + " | " +
+                  DoubleToString(((todayPL+current_pl/equity) * 100),2) + "%"); 
+                  
+   return(INIT_SUCCEEDED);
+  }
+//+------------------------------------------------------------------+
+ 
+  
+//+------------------------------------------------------------------+
+//| Expert deinitialization function                                 |
+//+------------------------------------------------------------------+
+void OnDeinit(const int reason)
+  {
+//--- destroy timer and delete objects
+   EventKillTimer();
+   ObjectDelete(0,"dateLabel");
+   ObjectDelete(0,"separator");
+   ObjectDelete(0,"equityLabel");
+   ObjectDelete(0,"balanceLabel");
+   ObjectDelete(0,"floatingeEquityLabel");
+   ObjectDelete(0,"todayPL");
+  }
+  
+
